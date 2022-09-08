@@ -27,6 +27,7 @@ use crate::detector::PitchDetector;
 use crate::float::Float;
 use crate::utils::buffer::square_sum;
 use crate::utils::peak::PeakCorrection;
+// use rustfft::num_complex::Complex;
 
 pub struct McLeodDetector<T>
 where
@@ -61,12 +62,12 @@ where
         if square_sum(signal) < power_threshold {
             return None;
         }
-        let result_ref = self.internals.buffers.get_real_buffer();
-        let result = &mut result_ref.borrow_mut()[..];
+        // let result_ref = self.internals.buffers.get_real_buffer();
+        // let result = &mut result_ref.borrow_mut()[..];
 
-        normalized_square_difference(signal, &mut self.internals.buffers, result);
+        normalized_square_difference(signal, &mut self.internals.signal_complex, &mut self.internals.scratch, &mut self.internals.scratch_complex, &mut self.internals.result);
         pitch_from_peaks(
-            result,
+            &mut self.internals.result,
             sample_rate,
             clarity_threshold,
             PeakCorrection::Quadratic,

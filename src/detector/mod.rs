@@ -4,6 +4,7 @@
 
 use crate::detector::internals::Pitch;
 use crate::float::Float;
+use rustfft::num_complex::Complex;
 
 pub mod autocorrelation;
 #[doc(hidden)]
