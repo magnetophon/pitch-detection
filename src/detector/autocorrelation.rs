@@ -21,6 +21,7 @@ use crate::detector::PitchDetector;
 use crate::float::Float;
 use crate::utils::peak::PeakCorrection;
 use crate::{detector::internals::autocorrelation, utils::buffer::square_sum};
+use rustfft::num_complex::Complex;
 
 pub struct AutocorrelationDetector<T>
 where
@@ -33,7 +34,10 @@ impl<T> AutocorrelationDetector<T>
 where
     T: Float,
 {
-    pub fn new(size: usize, padding: usize) -> Self {
+    pub fn new(
+        size: usize,
+        padding: usize,
+    ) -> Self {
         let internals = DetectorInternals::new(size, padding);
         AutocorrelationDetector { internals }
     }
@@ -56,12 +60,11 @@ where
             return None;
         }
 
-        let result_ref = self.internals.buffers.get_real_buffer();
-        let result = &mut result_ref.borrow_mut()[..];
+        // let result_ref = self.internals.buffers.get_real_buffer();
+        // let result = &mut result_ref.borrow_mut()[..];
+        autocorrelation(signal, &mut self.internals.signal_complex, &mut self.internals.scratch_complex, &mut self.internals.result);
+        let clarity_threshold = clarity_threshold * self.internals.result[0];
 
-        autocorrelation(signal, &mut self.internals.buffers, result);
-        let clarity_threshold = clarity_threshold * result[0];
-
-        pitch_from_peaks(result, sample_rate, clarity_threshold, PeakCorrection::None)
+        pitch_from_peaks(&mut self.internals.result, sample_rate, clarity_threshold, PeakCorrection::None)
     }
 }

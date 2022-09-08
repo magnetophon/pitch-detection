@@ -1,13 +1,16 @@
 use rustfft::FftPlanner;
 
+use crate::utils::buffer::copy_real_to_complex;
 use crate::utils::buffer::ComplexComponent;
 use crate::utils::buffer::{copy_complex_to_real, square_sum};
-use crate::utils::buffer::{copy_real_to_complex, BufferPool};
+// use crate::utils::buffer::{copy_real_to_complex, BufferPool};
 use crate::utils::peak::choose_peak;
 use crate::utils::peak::correct_peak;
 use crate::utils::peak::detect_peaks;
 use crate::utils::peak::PeakCorrection;
 use crate::{float::Float, utils::buffer::modulus_squared};
+use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
 
 /// A pitch's `frequency` as well as `clarity`, which is a measure
 /// of confidence in the pitch detection.
@@ -28,7 +31,11 @@ where
 {
     pub size: usize,
     pub padding: usize,
-    pub buffers: BufferPool<T>,
+    pub signal_complex: Vec<Complex<T>>,
+    pub truncated_signal_complex: Vec<Complex<T>>,
+    pub scratch: Vec<T>,
+    pub scratch_complex: Vec<Complex<T>>,
+    pub result: Vec<T>,
 }
 
 impl<T> DetectorInternals<T>
@@ -36,25 +43,33 @@ where
     T: Float,
 {
     pub fn new(size: usize, padding: usize) -> Self {
-        let buffers = BufferPool::new(size + padding);
+        // let buffers = BufferPool::new(size + padding);
 
         DetectorInternals {
             size,
             padding,
-            buffers,
+            signal_complex: vec![Complex::zero(); size + padding],
+            truncated_signal_complex: vec![Complex::zero(); size + padding],
+            scratch: vec![T::zero(); size + padding],
+            scratch_complex: vec![Complex::zero(); size + padding],
+            result: vec![T::zero(); size + padding],
         }
     }
 }
 
 /// Compute the autocorrelation of `signal` to `result`. All buffers but `signal`
 /// may be used as scratch.
-pub fn autocorrelation<T>(signal: &[T], buffers: &mut BufferPool<T>, result: &mut [T])
-where
+pub fn autocorrelation<T>(
+    signal: &[T],
+    signal_complex: &mut [Complex<T>],
+    scratch_complex: &mut [Complex<T>],
+    result: &mut [T],
+) where
     T: Float,
 {
-    let (ref1, ref2) = (buffers.get_complex_buffer(), buffers.get_complex_buffer());
-    let signal_complex = &mut ref1.borrow_mut()[..];
-    let scratch = &mut ref2.borrow_mut()[..];
+    // let (ref1, ref2) = (buffers.get_complex_buffer(), buffers.get_complex_buffer());
+    // let signal_complex = &mut ref1.borrow_mut()[..];
+    // let scratch = &mut ref2.borrow_mut()[..];
 
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft_forward(signal_complex.len());
@@ -62,9 +77,9 @@ where
 
     // Compute the autocorrelation
     copy_real_to_complex(signal, signal_complex, ComplexComponent::Re);
-    fft.process_with_scratch(signal_complex, scratch);
+    fft.process_with_scratch(signal_complex, scratch_complex);
     modulus_squared(signal_complex);
-    inv_fft.process_with_scratch(signal_complex, scratch);
+    inv_fft.process_with_scratch(signal_complex, scratch_complex);
     copy_complex_to_real(signal_complex, result, ComplexComponent::Re);
 }
 
@@ -109,16 +124,21 @@ where
     result[signal.len()..].iter_mut().for_each(|r| *r = last);
 }
 
-pub fn normalized_square_difference<T>(signal: &[T], buffers: &mut BufferPool<T>, result: &mut [T])
-where
+pub fn normalized_square_difference<T>(
+    signal: &[T],
+    signal_complex: &mut [Complex<T>],
+    scratch: &mut [T],
+    scratch_complex: &mut [Complex<T>],
+    result: &mut [T],
+) where
     T: Float + std::iter::Sum,
 {
     let two = T::from_usize(2).unwrap();
 
-    let scratch_ref = buffers.get_real_buffer();
-    let scratch = &mut scratch_ref.borrow_mut()[..];
+    // let scratch_ref = buffers.get_real_buffer();
+    // let scratch = &mut scratch_ref.borrow_mut()[..];
 
-    autocorrelation(signal, buffers, result);
+    autocorrelation(signal, signal_complex, scratch_complex, result);
     m_of_tau(signal, Some(result[0]), scratch);
     result
         .iter_mut()
@@ -135,30 +155,32 @@ where
 /// This function assumes `window_size` is at most half of the length of `signal`.
 pub fn windowed_autocorrelation<T>(
     signal: &[T],
+    signal_complex: &mut [Complex<T>],
+    truncated_signal_complex: &mut [Complex<T>],
+    scratch_complex: &mut [Complex<T>],
     window_size: usize,
-    buffers: &mut BufferPool<T>,
     result: &mut [T],
 ) where
     T: Float + std::iter::Sum,
 {
-    assert!(
-        buffers.buffer_size >= signal.len(),
-        "Buffers must have a length at least equal to `signal`."
-    );
+    // assert!(
+    // buffers.buffer_size >= signal.len(),
+    // "Buffers must have a length at least equal to `signal`."
+    // );
 
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft_forward(signal.len());
     let inv_fft = planner.plan_fft_inverse(signal.len());
 
-    let (scratch_ref1, scratch_ref2, scratch_ref3) = (
-        buffers.get_complex_buffer(),
-        buffers.get_complex_buffer(),
-        buffers.get_complex_buffer(),
-    );
+    // let (scratch_ref1, scratch_ref2, scratch_ref3) = (
+    // buffers.get_complex_buffer(),
+    // buffers.get_complex_buffer(),
+    // buffers.get_complex_buffer(),
+    // );
 
-    let signal_complex = &mut scratch_ref1.borrow_mut()[..signal.len()];
-    let truncated_signal_complex = &mut scratch_ref2.borrow_mut()[..signal.len()];
-    let scratch = &mut scratch_ref3.borrow_mut()[..signal.len()];
+    // let signal_complex = &mut scratch_ref1.borrow_mut()[..signal.len()];
+    // let truncated_signal_complex = &mut scratch_ref2.borrow_mut()[..signal.len()];
+    // let scratch = &mut scratch_ref3.borrow_mut()[..signal.len()];
 
     // To achieve the windowed autocorrelation, we compute the cross correlation between
     // the original signal and the signal truncated to lie in `0..window_size`
@@ -168,8 +190,8 @@ pub fn windowed_autocorrelation<T>(
         truncated_signal_complex,
         ComplexComponent::Re,
     );
-    fft.process_with_scratch(signal_complex, scratch);
-    fft.process_with_scratch(truncated_signal_complex, scratch);
+    fft.process_with_scratch(signal_complex, scratch_complex);
+    fft.process_with_scratch(truncated_signal_complex, scratch_complex);
     // rustfft doesn't normalize when it computes the fft, so we need to normalize ourselves by
     // dividing by `sqrt(signal.len())` each time we take an fft or inverse fft.
     // Since the fft is linear and we are doing fft -> inverse fft, we can just divide by
@@ -181,7 +203,7 @@ pub fn windowed_autocorrelation<T>(
         .for_each(|(a, b)| {
             *a = *a * normalization_const * b.conj();
         });
-    inv_fft.process_with_scratch(signal_complex, scratch);
+    inv_fft.process_with_scratch(signal_complex, scratch_complex);
 
     // The result is valid only for `0..window_size`
     copy_complex_to_real(&signal_complex[..window_size], result, ComplexComponent::Re);
@@ -196,8 +218,11 @@ pub fn windowed_autocorrelation<T>(
 /// the length of `signal`.
 pub fn windowed_square_error<T>(
     signal: &[T],
+    signal_complex: &mut [Complex<T>],
+    truncated_signal_complex: &mut [Complex<T>],
+    scratch_complex: &mut [Complex<T>],
     window_size: usize,
-    buffers: &mut BufferPool<T>,
+    // buffers: &mut BufferPool<T>,
     result: &mut [T],
 ) where
     T: Float + std::iter::Sum,
@@ -213,7 +238,14 @@ pub fn windowed_square_error<T>(
     // as d(t) = pow_0^w + pow_t^{t+w} - 2*windowed_autocorrelation(t)
     // where pow_a^b is the sum of the square of `signal` on the window `a..b`
     // We proceed accordingly.
-    windowed_autocorrelation(signal, window_size, buffers, result);
+    windowed_autocorrelation(
+        signal,
+        signal_complex,
+        truncated_signal_complex,
+        scratch_complex,
+        window_size,
+        result,
+    );
     let mut windowed_power = square_sum(&signal[..window_size]);
     let power = windowed_power;
 

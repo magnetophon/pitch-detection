@@ -28,6 +28,7 @@ use crate::detector::PitchDetector;
 use crate::float::Float;
 use crate::utils::buffer::square_sum;
 use crate::utils::peak::PeakCorrection;
+use rustfft::num_complex::Complex;
 
 use super::internals::{windowed_square_error, yin_normalize_square_error, DetectorInternals};
 
@@ -42,7 +43,10 @@ impl<T> YINDetector<T>
 where
     T: Float + std::iter::Sum,
 {
-    pub fn new(size: usize, padding: usize) -> Self {
+    pub fn new(
+        size: usize,
+        padding: usize,
+    ) -> Self {
         let internals = DetectorInternals::<T>::new(size, padding);
         YINDetector { internals }
     }
@@ -71,22 +75,29 @@ where
             return None;
         }
 
-        let result_ref = self.internals.buffers.get_real_buffer();
-        let result = &mut result_ref.borrow_mut()[..window_size];
+        // let result_ref = self.internals.buffers.get_real_buffer();
+        // let result = &mut result_ref.borrow_mut()[..window_size];
 
         // STEP 2: Calculate the difference function, d_t.
-        windowed_square_error(signal, window_size, &mut self.internals.buffers, result);
+        windowed_square_error(
+            signal,
+            &mut self.internals.signal_complex,
+            &mut self.internals.truncated_signal_complex,
+            &mut self.internals.scratch_complex,
+            window_size,
+            &mut self.internals.result,
+        );
 
         // STEP 3: Calculate the cumulative mean normalized difference function, d_t'.
-        yin_normalize_square_error(result);
+        yin_normalize_square_error(&mut self.internals.result);
 
         // STEP 4: The absolute threshold. We want the first dip below `threshold`.
         // The YIN paper looks for minimum peaks. Since `pitch_from_peaks` looks
         // for maximums, we take this opportunity to invert the signal.
-        result.iter_mut().for_each(|val| *val = threshold - *val);
+        &mut self.internals.result.iter_mut().for_each(|val| *val = threshold - *val);
 
         // STEP 5: Find the peak and use quadratic interpolation to fine-tune the result
-        pitch_from_peaks(result, sample_rate, T::zero(), PeakCorrection::Quadratic).map(|pitch| {
+        pitch_from_peaks(&mut self.internals.result, sample_rate, T::zero(), PeakCorrection::Quadratic).map(|pitch| {
             Pitch {
                 frequency: pitch.frequency,
                 // A `clarity` is not given by the YIN algorithm. However, we can
