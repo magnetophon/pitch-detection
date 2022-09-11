@@ -65,7 +65,14 @@ where
         // let result_ref = self.internals.buffers.get_real_buffer();
         // let result = &mut result_ref.borrow_mut()[..];
 
-        normalized_square_difference(signal, &mut self.internals.signal_complex, &mut self.internals.scratch, &mut self.internals.scratch_complex, &mut self.internals.result);
+        normalized_square_difference(signal,
+                                     &mut self.internals.signal_complex,
+                                     &mut self.internals.scratch,
+                                     &mut self.internals.scratch_complex,
+                                     // &mut self.internals.planner,
+                                     &self.internals.fft,
+                                     &self.internals.inv_fft,
+                                     &mut self.internals.result);
         pitch_from_peaks(
             &mut self.internals.result,
             sample_rate,

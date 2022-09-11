@@ -1,4 +1,5 @@
 use rustfft::FftPlanner;
+use rustfft::Fft;
 
 use crate::utils::buffer::copy_real_to_complex;
 use crate::utils::buffer::ComplexComponent;
@@ -11,6 +12,7 @@ use crate::utils::peak::PeakCorrection;
 use crate::{float::Float, utils::buffer::modulus_squared};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
+use std::sync::Arc;
 
 /// A pitch's `frequency` as well as `clarity`, which is a measure
 /// of confidence in the pitch detection.
@@ -35,6 +37,9 @@ where
     pub truncated_signal_complex: Vec<Complex<T>>,
     pub scratch: Vec<T>,
     pub scratch_complex: Vec<Complex<T>>,
+    // pub planner: FftPlanner<T>,
+    pub fft: Arc<dyn Fft<T>>,
+    pub inv_fft: Arc<dyn Fft<T>>,
     pub result: Vec<T>,
 }
 
@@ -44,6 +49,7 @@ where
 {
     pub fn new(size: usize, padding: usize) -> Self {
         // let buffers = BufferPool::new(size + padding);
+        let mut planner = FftPlanner::new();
 
         DetectorInternals {
             size,
@@ -52,6 +58,12 @@ where
             truncated_signal_complex: vec![Complex::zero(); size + padding],
             scratch: vec![T::zero(); size + padding],
             scratch_complex: vec![Complex::zero(); size + padding],
+            // planner : FftPlanner::new(),
+            // fft: planner.plan_fft_forward(signal_complex.len()),
+            // fft: Arc::new(planner.plan_fft_forward(size+padding)),
+            // inv_fft: Arc::new(planner.plan_fft_inverse(size+padding)),
+            fft: planner.plan_fft_forward(size+padding),
+            inv_fft: planner.plan_fft_inverse(size+padding),
             result: vec![T::zero(); size + padding],
         }
     }
@@ -63,6 +75,9 @@ pub fn autocorrelation<T>(
     signal: &[T],
     signal_complex: &mut [Complex<T>],
     scratch_complex: &mut [Complex<T>],
+    // planner: &mut FftPlanner<T>,
+    fft: &Arc<dyn Fft<T>>,
+    inv_fft: &Arc<dyn Fft<T>>,
     result: &mut [T],
 ) where
     T: Float,
@@ -71,9 +86,9 @@ pub fn autocorrelation<T>(
     // let signal_complex = &mut ref1.borrow_mut()[..];
     // let scratch = &mut ref2.borrow_mut()[..];
 
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(signal_complex.len());
-    let inv_fft = planner.plan_fft_inverse(signal_complex.len());
+    // let mut planner = FftPlanner::new();
+    // let fft = planner.plan_fft_forward(signal_complex.len());
+    // let inv_fft = planner.plan_fft_inverse(signal_complex.len());
 
     // Compute the autocorrelation
     copy_real_to_complex(signal, signal_complex, ComplexComponent::Re);
@@ -129,6 +144,9 @@ pub fn normalized_square_difference<T>(
     signal_complex: &mut [Complex<T>],
     scratch: &mut [T],
     scratch_complex: &mut [Complex<T>],
+    // planner: & mut FftPlanner<T>,
+    fft: &Arc<dyn Fft<T>>,
+    inv_fft: &Arc<dyn Fft<T>>,
     result: &mut [T],
 ) where
     T: Float + std::iter::Sum,
@@ -138,7 +156,7 @@ pub fn normalized_square_difference<T>(
     // let scratch_ref = buffers.get_real_buffer();
     // let scratch = &mut scratch_ref.borrow_mut()[..];
 
-    autocorrelation(signal, signal_complex, scratch_complex, result);
+    autocorrelation(signal, signal_complex, scratch_complex, fft, inv_fft, result);
     m_of_tau(signal, Some(result[0]), scratch);
     result
         .iter_mut()
@@ -158,6 +176,9 @@ pub fn windowed_autocorrelation<T>(
     signal_complex: &mut [Complex<T>],
     truncated_signal_complex: &mut [Complex<T>],
     scratch_complex: &mut [Complex<T>],
+    // planner: & mut FftPlanner<T>,
+    fft: &Arc<dyn Fft<T>>,
+    inv_fft: &Arc<dyn Fft<T>>,
     window_size: usize,
     result: &mut [T],
 ) where
@@ -168,9 +189,9 @@ pub fn windowed_autocorrelation<T>(
     // "Buffers must have a length at least equal to `signal`."
     // );
 
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(signal.len());
-    let inv_fft = planner.plan_fft_inverse(signal.len());
+    // let mut planner = FftPlanner::new();
+    // let fft = planner.plan_fft_forward(signal.len());
+    // let inv_fft = planner.plan_fft_inverse(signal.len());
 
     // let (scratch_ref1, scratch_ref2, scratch_ref3) = (
     // buffers.get_complex_buffer(),
@@ -221,6 +242,9 @@ pub fn windowed_square_error<T>(
     signal_complex: &mut [Complex<T>],
     truncated_signal_complex: &mut [Complex<T>],
     scratch_complex: &mut [Complex<T>],
+    // planner: & mut FftPlanner<T>,
+    fft: &Arc<dyn Fft<T>>,
+    inv_fft: &Arc<dyn Fft<T>>,
     window_size: usize,
     // buffers: &mut BufferPool<T>,
     result: &mut [T],
@@ -243,6 +267,9 @@ pub fn windowed_square_error<T>(
         signal_complex,
         truncated_signal_complex,
         scratch_complex,
+        // planner,
+        fft,
+        inv_fft,
         window_size,
         result,
     );
