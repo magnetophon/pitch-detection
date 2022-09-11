@@ -28,7 +28,6 @@ use crate::detector::PitchDetector;
 use crate::float::Float;
 use crate::utils::buffer::square_sum;
 use crate::utils::peak::PeakCorrection;
-use rustfft::num_complex::Complex;
 
 use super::internals::{windowed_square_error, yin_normalize_square_error, DetectorInternals};
 
@@ -84,6 +83,9 @@ where
             &mut self.internals.signal_complex,
             &mut self.internals.truncated_signal_complex,
             &mut self.internals.scratch_complex,
+            // &mut self.internals.planner,
+            &self.internals.fft,
+            &self.internals.inv_fft,
             window_size,
             &mut self.internals.result,
         );
