@@ -52,6 +52,7 @@ where
         sample_rate: usize,
         power_threshold: T,
         clarity_threshold: T,
+        pick_threshold: T,
     ) -> Option<Pitch<T>> {
         assert_eq!(signal.len(), self.internals.size);
 
@@ -69,6 +70,6 @@ where
                         &mut self.internals.result);
         let clarity_threshold = clarity_threshold * self.internals.result[0];
 
-        pitch_from_peaks(&mut self.internals.result, sample_rate, clarity_threshold, PeakCorrection::None)
+        pitch_from_peaks(&mut self.internals.result, sample_rate, clarity_threshold, pick_threshold, PeakCorrection::None)
     }
 }

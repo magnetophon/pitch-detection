@@ -13,6 +13,7 @@ use crate::{float::Float, utils::buffer::modulus_squared};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use std::sync::Arc;
+use std::cmp::Ordering;
 
 /// A pitch's `frequency` as well as `clarity`, which is a measure
 /// of confidence in the pitch detection.
@@ -97,11 +98,11 @@ pub fn autocorrelation<T>(
     inv_fft.process_with_scratch(signal_complex, scratch_complex);
     copy_complex_to_real(signal_complex, result, ComplexComponent::Re);
 }
-
 pub fn pitch_from_peaks<T>(
     input: &[T],
     sample_rate: usize,
     clarity_threshold: T,
+    pick_threshold: T,
     correction: PeakCorrection,
 ) -> Option<Pitch<T>>
 where
@@ -109,8 +110,13 @@ where
 {
     let sample_rate = T::from_usize(sample_rate).unwrap();
     let peaks = detect_peaks(input);
-
-    choose_peak(peaks, clarity_threshold)
+    let peaks2 = detect_peaks(input);
+    let maxpeak = peaks2.max_by(|x, y| x.1.partial_cmp(&y.1).unwrap_or_else(|| Ordering::Equal));
+    let thresh2 = match maxpeak {
+        None => T::from(0).unwrap(),
+        Some(p) => p.1 * pick_threshold,
+    };
+    choose_peak(peaks, thresh2, clarity_threshold)
         .map(|peak| correct_peak(peak, input, correction))
         .map(|peak| Pitch {
             frequency: sample_rate / peak.0,

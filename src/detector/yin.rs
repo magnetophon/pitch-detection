@@ -62,6 +62,7 @@ where
         sample_rate: usize,
         power_threshold: T,
         clarity_threshold: T,
+        pick_threshold: T,
     ) -> Option<Pitch<T>> {
         // The YIN paper uses 0.1 as a threshold; TarsosDSP uses 0.2. `threshold` is not quite
         // the same thing as 1 - clarity, but it should be close enough.
@@ -99,7 +100,7 @@ where
         &mut self.internals.result.iter_mut().for_each(|val| *val = threshold - *val);
 
         // STEP 5: Find the peak and use quadratic interpolation to fine-tune the result
-        pitch_from_peaks(&mut self.internals.result, sample_rate, T::zero(), PeakCorrection::Quadratic).map(|pitch| {
+        pitch_from_peaks(&mut self.internals.result, sample_rate, T::zero(), pick_threshold, PeakCorrection::Quadratic).map(|pitch| {
             Pitch {
                 frequency: pitch.frequency,
                 // A `clarity` is not given by the YIN algorithm. However, we can

@@ -33,5 +33,6 @@ where
         sample_rate: usize,
         power_threshold: T,
         clarity_threshold: T,
+        pick_threshold: T,
     ) -> Option<Pitch<T>>;
 }

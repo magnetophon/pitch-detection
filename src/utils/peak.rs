@@ -91,8 +91,9 @@ pub fn detect_peaks<'a, T: Float>(arr: &'a [T]) -> impl Iterator<Item = (usize, 
 pub fn choose_peak<I: Iterator<Item = (usize, T)>, T: Float>(
     mut peaks: I,
     threshold: T,
+    threshold2: T,
 ) -> Option<(usize, T)> {
-    peaks.find(|p| p.1 > threshold)
+    peaks.find(|p| p.1 > threshold && p.1 > threshold2)
 }
 
 pub fn correct_peak<T: Float>(peak: (usize, T), data: &[T], correction: PeakCorrection) -> (T, T) {
